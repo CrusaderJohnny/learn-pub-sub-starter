@@ -3,9 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
 
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -22,12 +21,30 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to open a channel: %s", err)
 	}
-	pubsub.PublishJSON(newChannel, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{
-		IsPaused: true,
-	})
 	fmt.Println("Peril game server connected to RabbitMQ!")
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	<-signalChan
-	fmt.Println("RabbitMQ connection closed.")
+	gamelogic.PrintServerHelp()
+	for {
+		userWords := gamelogic.GetInput()
+		if len(userWords) == 0 {
+			continue
+		}
+		first := userWords[0]
+		switch first {
+		case "pause":
+			log.Println("Pausing Peril game server")
+			err = pubsub.PublishJSON(newChannel, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{
+				IsPaused: true,
+			})
+		case "resume":
+			log.Println("Resuming Peril game server")
+			err = pubsub.PublishJSON(newChannel, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{
+				IsPaused: false,
+			})
+		case "quit":
+			log.Println("Quitting Peril game server")
+			return
+		default:
+			log.Println("Unknown command")
+		}
+	}
 }
