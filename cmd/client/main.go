@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -24,12 +22,57 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	transChannel, _, err := pubsub.DeclareAndBind(conn, routing.ExchangePerilDirect, routing.PauseKey+"."+userName, routing.PauseKey, pubsub.SimpleQueueTransient)
+	gs := gamelogic.NewGameState(userName)
+	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilDirect, "pause."+userName, routing.PauseKey, pubsub.SimpleQueueTransient, handlerPause(gs))
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer transChannel.Close()
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt)
-	<-sigChan
+	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, "army_moves."+userName, "army_moves.*", pubsub.SimpleQueueTransient, handlerMove(gs))
+	if err != nil {
+		log.Fatal(err)
+	}
+	moveCh, err := conn.Channel()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	//REPL
+	for {
+		commandInput := gamelogic.GetInput()
+		if len(commandInput) == 0 {
+			continue
+		}
+		switch commandInput[0] {
+		case "spawn":
+			err = gs.CommandSpawn(commandInput)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+		case "move":
+			move, err := gs.CommandMove(commandInput)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			err = pubsub.PublishJSON(moveCh, routing.ExchangePerilTopic, "army_moves."+userName, move)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			log.Println("Moved to", commandInput[1])
+		case "status":
+			gs.CommandStatus()
+		case "help":
+			gamelogic.PrintClientHelp()
+		case "spam":
+			log.Println("Spamming not allowed yet!")
+		case "quit":
+			gamelogic.PrintQuit()
+			return
+		default:
+			log.Println("Unknown command")
+			continue
+		}
+	}
 }
