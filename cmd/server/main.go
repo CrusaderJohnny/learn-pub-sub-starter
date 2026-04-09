@@ -21,9 +21,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to open a channel: %s", err)
 	}
-	_, _, err = pubsub.DeclareAndBind(conn, routing.ExchangePerilTopic, routing.GameLogSlug, routing.GameLogSlug+".*", pubsub.SimpleQueueDurable)
+	err = pubsub.SubscribeGob(conn, routing.ExchangePerilTopic, routing.GameLogSlug, routing.GameLogSlug+".*", pubsub.SimpleQueueDurable, handlerLogs())
 	if err != nil {
-		log.Fatalf("Failed to declare a queue: %s", err)
+		log.Fatalf("Failed to subscribe to game logs: %s", err)
 	}
 
 	fmt.Println("Peril game server connected to RabbitMQ!")

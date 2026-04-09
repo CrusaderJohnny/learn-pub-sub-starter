@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"strconv"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -23,7 +24,7 @@ func main() {
 		log.Fatal(err)
 	}
 	gs := gamelogic.NewGameState(userName)
-	moveCh, err := conn.Channel()
+	publishCh, err := conn.Channel()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -31,11 +32,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, "army_moves."+userName, "army_moves.*", pubsub.SimpleQueueTransient, handlerMove(gs, moveCh))
+	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, "army_moves."+userName, "army_moves.*", pubsub.SimpleQueueTransient, handlerMove(gs, publishCh))
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, "war", routing.WarRecognitionsPrefix+".*", pubsub.SimpleQueueDurable, handlerWarMoves(gs))
+	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, "war", routing.WarRecognitionsPrefix+".*", pubsub.SimpleQueueDurable, handlerWar(gs, publishCh))
 
 	//REPL
 	for {
@@ -56,7 +57,7 @@ func main() {
 				log.Println(err)
 				continue
 			}
-			err = pubsub.PublishJSON(moveCh, routing.ExchangePerilTopic, "army_moves."+userName, move)
+			err = pubsub.PublishJSON(publishCh, routing.ExchangePerilTopic, "army_moves."+userName, move)
 			if err != nil {
 				log.Println(err)
 				continue
@@ -67,7 +68,22 @@ func main() {
 		case "help":
 			gamelogic.PrintClientHelp()
 		case "spam":
-			log.Println("Spamming not allowed yet!")
+			if len(commandInput) < 2 {
+				log.Println("spam requires at least two arguments")
+				continue
+			}
+			spamAmount, err := strconv.Atoi(commandInput[1])
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			for i := 0; i < spamAmount; i++ {
+				err = pubsub.PublishGob(publishCh, routing.ExchangePerilTopic, routing.GameLogSlug+"."+userName, gamelogic.GetMaliciousLog())
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+			}
 		case "quit":
 			gamelogic.PrintQuit()
 			return
